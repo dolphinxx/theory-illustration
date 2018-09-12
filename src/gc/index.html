@@ -6,7 +6,16 @@
     <link href="/public/gc/style.css" rel="stylesheet" type="text/css">
 </head>
 <body>
+<div><button id="startBtn">Start</button><label>Status: <span id="status"></span></label></div>
+<div>
+    <label title="The chance for the eden's objects to be collected, range: 0-1">Eden Collect Chance:<input id="edenCollectChance"></label>
+    <label title="The chance for the from survivor's objects to be collected, range: 0-1">Survivor Collect Chance:<input id="survivorCollectChance"></label>
+    <label>Max Tenuring Threshold:<input id="maxTenuringThreshold"></label>
+    <label title="The object's size = Math.random() * objectBaseSize">Object Base Size:<input id="objectBaseSize"></label>
+    <label title="The period objects creates & the duration of transitions.">Tick Period:<input id="tickPeriod"></label>
+</div>
 <svg id="container"></svg>
+<script src="https://cdn.staticfile.org/jquery/3.3.1/jquery.js"></script>
 <script src="https://cdn.staticfile.org/d3/5.7.0/d3.js"></script>
 <script src="/public/gc/index.js"></script>
 </body>
