@@ -1,0 +1,28 @@
+.young-generation {
+  fill: grey;
+  stroke: none;
+}
+.eden {
+  fill: #ffe1df;
+  stroke: none;
+}
+.survivor {
+  stroke: #ff3ffa;
+  fill: none;
+}
+.label-container {
+  //transform: translateX(-50%);
+}
+.label {
+  fill: black;
+  font-size: 10px;
+  text-anchor: middle;
+}
+.inline-label {
+  fill: crimson;
+  text-anchor: middle;
+  font-size: 6px;
+}
+.object {
+  stroke: none;
+}
