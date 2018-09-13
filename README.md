@@ -1,17 +1,22 @@
 # Some Illustration
 
+## List
+- [Java Generational Garbage Collection](src/gc)
+
 ## Install
 ```sh
 npm install
 ```
 
-## Run(http://localhost:3000)
+## Build
 ```sh
-npm run start
+gulp build
 ```
 
 ## Dev
 ```sh
-npm run start
 gulp watch
 ```
+
+## Run
+Just open the plain html files.
