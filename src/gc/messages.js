@@ -8,10 +8,10 @@ const i18n = {
         survivorSurviveChanceTitle: '生存区对象存活机率，范围：0-1',
         maxTenuringThresholdLabel: '老年化阈值',
         maxTenuringThresholdTitle: '达到该阈值',
-        objectBaseSizeLabel: 'Object Base Size',
-        objectBaseSizeTitle: 'The object\'s size = Math.random() * objectBaseSize',
-        tickPeriodLabel: 'Tick Period',
-        tickPeriodTitle: 'The period objects create & the duration of transitions',
+        objectBaseSizeLabel: '对象尺寸基数',
+        objectBaseSizeTitle: '新创建对象尺寸 = Math.random() * objectBaseSize',
+        tickPeriodLabel: '步骤执行间隔',
+        tickPeriodTitle: '对象创建间隔与动画执行时间',
         stop: '停止',
         start: '开始',
         stopped: '已停止',
@@ -54,6 +54,7 @@ const i18n = {
         minorGCMarking:'Minor GC marking',
         minorGCRecycling: 'Minor GC recycling',
         minorGCFinished: 'Minor GC finished.',
+        majorGCStart: 'Major GC start...'
     },
     get(lang) {
         if (lang.indexOf('-') !== -1) {
