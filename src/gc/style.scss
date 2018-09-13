@@ -8,7 +8,11 @@
 }
 .survivor {
   stroke: none;
+  fill: #c3f4bd;
+}
+.tenured {
   fill: none;
+  stroke: #ff2457;
 }
 .splitter{
   stroke: none;
@@ -23,7 +27,7 @@
   text-anchor: middle;
 }
 .inline-label {
-  fill: crimson;
+  fill: white;
   text-anchor: middle;
   font-size: 6px;
 }
