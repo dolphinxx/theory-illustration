@@ -251,12 +251,12 @@ function minorGC(callback) {
     updateStatus(messages.minorGCStart);
     ticks.push(() => {
         const toSurvivorObjects = [];
-        const markable = [];
+        const marked = [];
         const collectible = [];
         const promotable = [];
         for(let obj of [...edenObjects, ...survivorObjects]) {
             if(isCollectible(obj._data.position === 's'?config.survivorSurviveChance:config.edenSurviveChance)) {
-                markable.push(mark(obj));
+                marked.push(mark(obj));
                 collectible.push(collect(obj, edenObjects));
                 continue;
             }
@@ -276,10 +276,10 @@ function minorGC(callback) {
             });
         }
         let threads = config.gcType === 'serialGC' ? 1 : config.parallelThreads;
-        while(markable.length > 0 && threads > 0) {
+        while(marked.length > 0 && threads > 0) {
             let tasks = [];
             for(let i = 0;i < threads;i++) {
-                let fn = markable.shift();
+                let fn = marked.shift();
                 if(fn) {
                     tasks.push(fn);
                 }
