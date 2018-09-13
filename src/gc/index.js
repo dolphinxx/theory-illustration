@@ -42,7 +42,9 @@ const config = {
     gcType: 'serialGC',
     parallelThreads: 2,
     oom: false,
-    step: null
+    step: null,
+    minorGCs: 0,
+    majorGCs: 0
 };
 config.edenWidth = config.youngWidth * 0.6;
 config.tenuredWidth = config.youngWidth / 2.5;
@@ -115,6 +117,8 @@ $(function(){
         $(this).text(config.running ? messages.stop:messages.start);
         updateStatus(config.running ? messages.running : messages.stopped);
     });
+    $('<label>Major GC Count: <code id="majorGCStat">0</code></label>').appendTo(toolsContainer);
+    $('<label>Minor GC Count: <code id="minorGCStat">0</code></label>').appendTo(toolsContainer);
     $('<label>Status: <code id="status"></code></label>').appendTo(toolsContainer).find('code').text(messages.stopped);
 });
 function updateStatus(status) {
@@ -230,7 +234,7 @@ function createObject() {
     const c = svg.append('svg')
         .attr('width', size)
         .attr('height', config.youngHeight)
-        .attr('x', config.youngX + config.youngWidth / 2)
+        .attr('x', config.youngX + config.youngWidth / 2 - size / 2)
         .attr('y', 0)
         .attr('class', 'object');
     c.append('rect')
@@ -253,6 +257,7 @@ function majorGC(obj) {
         OOM(obj);
         return;
     }
+    updateMajorGCs();
     updateStatus(messages.majorGCStart);
     config.step = 'majorGC';
     switch(config.gcType) {
@@ -328,6 +333,7 @@ function majorGC(obj) {
     }
 }
 function minorGC(callback) {
+    updateMinorGCs();
     updateStatus(messages.minorGCStart);
     config.step = 'minorGC';
     ticks.push(() => {
@@ -556,4 +562,13 @@ function clear() {
     survivor1._data.size = 0;
     survivor2._data.size = 0;
     tenuredGeneration._data.size = 0;
+}
+
+function updateMajorGCs(){
+    config.majorGCs++;
+    $('#majorGCStat').text(config.majorGCs);
+}
+function updateMinorGCs(){
+    config.minorGCs++;
+    $('#minorGCStat').text(config.minorGCs);
 }
