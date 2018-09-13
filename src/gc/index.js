@@ -1,33 +1,70 @@
+function getLang() {
+    let search = location.search;
+    if(search) {
+        let pos = search.indexOf('lang=');
+        if(pos !== -1) {
+            search = search.substring(pos + 5);
+            if(search.indexOf('&') !== -1) {
+                search = search.substring(0, search.indexOf('&'));
+            }
+            return formatLang(search);
+        }
+    }
+    if(window.navigator.language) {
+        return formatLang(window.navigator.language);
+    }
+    return 'EN';
+}
+function formatLang(lang) {
+    if(lang.indexOf('-') !== -1) {
+        return lang.substring(lang.indexOf('-') + 1);
+    }
+    return lang;
+}
+const lang = getLang();
+const messages = i18n.get(lang);
 const config = {
     width: 500,
     height: 500,
-    youngWidth: 400,
+    youngWidth: 500,
     youngHeight: 20,
     youngX: 0,
     youngY: 100,
-    edenWidth: 200,
     tenuredX: 0,
-    tenuredWidth: 200,
     splitterWidth: 2,
     maxTenuringThreshold: 5,
-    edenCollectChance: 0.8,
-    survivorCollectChance: 0.2,
+    edenSurviveChance: 0.2,
+    survivorSurviveChance: 0.8,
     objectBaseSize: 20,
     tickPeriod: 500,
     running: false
 };
+config.edenWidth = config.youngWidth / 2;
+config.tenuredWidth = config.youngWidth / 3;
 config.tenuredY = config.youngY + 100;
 config.survivorWidth = (config.youngWidth - config.edenWidth) / 2;
 const options = [
-    {name: 'edenCollectChance', label:'Eden Collect Chance', title: 'The chance for the eden\'s objects to be collected, range: 0-1'},
-    {name: 'survivorCollectChance', label:'Survivor Collect Chance', title: 'The chance for the from survivor\'s objects to be collected, range: 0-1'},
-    {name: 'maxTenuringThreshold', label:'Max Tenuring Threshold', title: ''},
-    {name: 'objectBaseSize', label:'Object Base Size', title: 'The object\'s size = Math.random() * objectBaseSize'},
-    {name: 'tickPeriod', label:'Tick Period', title: 'The period objects create & the duration of transitions'}
+    {name: 'edenSurviveChance', label:messages.edenSurviveChanceLabel, title: messages.edenSurviveChanceTitle},
+    {name: 'survivorSurviveChance', label:messages.survivorSurviveChanceLabel, title: messages.survivorSurviveChanceTitle},
+    {name: 'maxTenuringThreshold', label:messages.maxTenuringThresholdLabel, title: messages.maxTenuringThresholdTitle},
+    {name: 'objectBaseSize', label:messages.objectBaseSizeLabel, title: messages.objectBaseSizeTitle},
+    {name: 'tickPeriod', label:messages.tickPeriodLabel, title:messages.tickPeriodTitle}
     ];
 
 
 $(function(){
+    const title = $('<h1></h1>').text(messages.title).prependTo($('.container'));
+    const langContainer = $('<div></div>').addClass('lang').appendTo(title);
+    langContainer.append(`<label>${messages.lang}</label>`);
+    const langSelector = $('<select></select>').appendTo(langContainer);
+    for(let o in i18n) {
+        if(i18n.hasOwnProperty(o) && typeof i18n[o] === 'object') {
+            langSelector.append(`<option value="${o}" ${o === lang ? 'selected':''}>${o}</option>`);
+        }
+    }
+    langSelector.change(function(){
+       window.location = `${window.location.protocol}//${window.location.host}${window.location.pathname}?lang=${$(this).val()}`;
+    });
     const optionsContainer = $('#options');
     for(let option of options) {
         $(`
@@ -39,19 +76,22 @@ $(function(){
             config[option.name] = Number($(this).val());
         });
     }
-    $('#startBtn').click(function(){
+    const toolsContainer = $('#tools');
+    const startBtn = $('<button id="startBtn" class="btn btn-default"></button>').text(messages.start)
+        .appendTo(toolsContainer)
+        .click(function(){
         config.running = !config.running;
-        $(this).text(config.running ? 'Stop':'Start');
-        updateStatus(config.running ? 'OK' : 'Stopped');
+        $(this).text(config.running ? messages.stop:messages.start);
+        updateStatus(config.running ? messages.running : messages.stopped);
     });
+    $('<label>Status: <code id="status"></code></label>').appendTo(toolsContainer).find('code').text(messages.stopped);
 });
 function updateStatus(status) {
     $('#status').text(status);
 }
-
 var svg = d3.select('#container')
     .attr("preserveAspectRatio", "xMidYMid")
-    .attr("viewBox", "0 0 500 500")
+    .attr("viewBox", `0 0 ${config.width} ${config.height}`)
     .attr("width", "100%")
     .attr("height", "100%");
 svg.append('pattern')
@@ -108,7 +148,7 @@ svg.append('g')
     .attr('x', config.youngX + config.edenWidth / 2)
     .attr('y', config.youngY + config.youngHeight + 16)
     .attr('class', 'label')
-    .text('Eden');
+    .text(messages.eden);
 
 survivor1._data.label = svg.append('g')
     .attr('class', 'label-container')
@@ -116,7 +156,7 @@ survivor1._data.label = svg.append('g')
     .attr('x', config.youngX + config.edenWidth + config.survivorWidth / 2)
     .attr('y', config.youngY + config.youngHeight + 16)
     .attr('class', 'label')
-    .text('From Survivor');
+    .text(messages.fromSurvivor);
 
 survivor2._data.label = svg.append('g')
     .attr('class', 'label-container')
@@ -124,13 +164,13 @@ survivor2._data.label = svg.append('g')
     .attr('x', config.youngX + config.edenWidth + config.survivorWidth + config.survivorWidth / 2)
     .attr('y', config.youngY + config.youngHeight + 16)
     .attr('class', 'label')
-    .text('To Survivor');
+    .text(messages.toSurvivor);
 
 svg.append('text')
     .attr('x', config.youngX + config.youngWidth/2)
     .attr('y', config.youngY + config.youngHeight + 32)
     .attr('class', 'label')
-    .text('Young Generation');
+    .text(messages.youngGeneration);
 
 const tenuredGeneration = svg.append('rect')
     .attr('x', config.tenuredX)
@@ -143,8 +183,12 @@ svg.append('text')
     .attr('x', config.tenuredX + config.tenuredWidth/2)
     .attr('y', config.tenuredY + config.youngHeight + 16)
     .attr('class', 'label')
-    .text('Tenured Generation');
-
+    .text(messages.tenuredGeneration);
+svg.append('text')
+    .attr('x', config.youngX + config.youngWidth / 2)
+    .attr('y', config.youngHeight + 16)
+    .attr('class', 'label')
+    .text(messages.newObject);
 let edenSize = 0;
 let edenObjects = [];
 let survivorObjects = [];
@@ -156,7 +200,7 @@ function createObject() {
         .attr('width', size)
         .attr('height', config.youngHeight)
         .attr('x', config.youngX + config.youngWidth / 2)
-        .attr('y', config.youngY + config.youngHeight + 200);
+        .attr('y', 0);
     c.append('rect')
         .attr('width', size)
         .attr('height', config.youngHeight)
@@ -170,18 +214,18 @@ function createObject() {
     c._data = {size};
     return c;
 }
-function isCollectible(chance) {
-    return Math.random() < chance;
+function isCollectible(surviveChance) {
+    return Math.random() > surviveChance;
 }
 function minorGC(callback) {
-    updateStatus('Minor GC start...');
+    updateStatus(messages.minorGCStart);
     ticks.push(() => {
         const toSurvivorObjects = [];
         const collectible = [];
         const promotable = [];
         for(let obj of [...edenObjects, ...survivorObjects]) {
-            updateStatus('Minor GC marking');
-            if(isCollectible(obj._data.position === 's'?config.survivorCollectChance:config.edenCollectChance)) {
+            updateStatus(messages.minorGCMarking);
+            if(isCollectible(obj._data.position === 's'?config.survivorSurviveChance:config.edenSurviveChance)) {
                 collectible.push(collect(obj, edenObjects));
                 continue;
             }
@@ -201,7 +245,7 @@ function minorGC(callback) {
             });
         }
         ticks.push(() => {
-            updateStatus('Minor GC collecting');
+            updateStatus(messages.minorGCRecycling);
             collectible.forEach((fn) => fn());
         });
         promotable.forEach(fn => {
@@ -214,10 +258,10 @@ function minorGC(callback) {
             const oldFromSurvivor = survivors[0];
             survivors[0] = survivors[1];
             survivors[1] = oldFromSurvivor;
-            survivors[0]._data.label.text('From Survivor');
-            survivors[1]._data.label.text('To Survivor');
+            survivors[0]._data.label.text(messages.fromSurvivor);
+            survivors[1]._data.label.text(messages.toSurvivor);
             edenSize = 0;
-            updateStatus('Minor GC finished.');
+            updateStatus(messages.minorGCFinished);
         });
         if(callback) {
             callback();
@@ -269,12 +313,13 @@ const ticks = [];
 }());
 
 function doCreate() {
-    updateStatus('OK');
+    updateStatus(messages.ok);
     const obj = createObject();
     const size = obj._data.size;
     if(edenSize + size > config.edenWidth) {
         minorGC(() => {
             ticks.push(() => {
+                updateStatus(messages.running);
                 edenObjects.push(obj);
                 obj.transition()
                     .duration(config.tickPeriod)
