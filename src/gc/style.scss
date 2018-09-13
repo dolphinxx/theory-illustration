@@ -30,13 +30,15 @@
   font-size: 10px;
   text-anchor: middle;
 }
-.inline-label {
-  fill: white;
-  text-anchor: middle;
-  font-size: 6px;
-}
 .object {
-  stroke: none;
+  rect {
+    stroke: none;
+  }
+  text {
+    fill: white;
+    text-anchor: middle;
+    font-size: 6px;
+  }
 }
 .lang {
   display: inline-block;

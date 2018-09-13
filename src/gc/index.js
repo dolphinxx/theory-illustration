@@ -35,22 +35,26 @@ const config = {
     maxTenuringThreshold: 15,
     edenSurviveChance: 0.1,
     survivorSurviveChance: 0.7,
+    tenuredSurviveChance: 0.8,
     objectBaseSize: 20,
     tickPeriod: 300,
     running: false,
     gcType: 'serialGC',
-    parallelThreads: 2
+    parallelThreads: 2,
+    oom: false,
+    step: null
 };
 config.edenWidth = config.youngWidth * 0.6;
-config.tenuredWidth = config.youngWidth / 3;
+config.tenuredWidth = config.youngWidth / 2.5;
 config.tenuredY = config.youngY + 100;
 config.survivorWidth = (config.youngWidth - config.edenWidth) / 2;
 const options = [
     {name: 'edenSurviveChance', label:messages.edenSurviveChanceLabel, title: messages.edenSurviveChanceTitle, width: 6},
     {name: 'survivorSurviveChance', label:messages.survivorSurviveChanceLabel, title: messages.survivorSurviveChanceTitle, width: 6},
+    {name: 'tenuredSurviveChance', label:messages.tenuredSurviveChanceLabel, title: messages.tenuredSurviveChanceTitle, width: 6},
     {name: 'maxTenuringThreshold', label:messages.maxTenuringThresholdLabel, title: messages.maxTenuringThresholdTitle, width: 6},
     {name: 'objectBaseSize', label:messages.objectBaseSizeLabel, title: messages.objectBaseSizeTitle, width: 6},
-    {name: 'tickPeriod', label:messages.tickPeriodLabel, title:messages.tickPeriodTitle, width: 4}
+    {name: 'tickPeriod', label:messages.tickPeriodLabel, title:messages.tickPeriodTitle, width: 6}
     ];
 const gcTypes = [
     {name: 'serialGC', label: 'Serial GC', description: 'The serial collector is the default for client style machines in Java SE 5 and 6. With the serial collector, both minor and major garbage collections are done serially (using a single virtual CPU). In addition, it uses a mark-compact collection method. This method moves older memory to the beginning of the heap so that new memory allocations are made into a single continuous chunk of memory at the end of the heap. This compacting of memory makes it faster to allocate new chunks of memory to the heap.'},
@@ -85,7 +89,7 @@ $(function(){
         });
     }
 
-    const gcTypeContainer = $('<div class="form-group col-sm-4"></div>').appendTo(optionsContainer);
+    const gcTypeContainer = $('<div class="form-group col-sm-6"></div>').appendTo(optionsContainer);
     gcTypeContainer.append('<label>GC Types</label>');
     const gcTypeSelector = $('<select class="form-control"></select>').appendTo(gcTypeContainer);
     for(let type of gcTypes) {
@@ -94,7 +98,7 @@ $(function(){
     gcTypeSelector.change(function(){
        config.gcType = $(this).val();
     });
-    const gcThreadsContainer = $('<div class="form-group col-sm-4"></div>').appendTo(optionsContainer);
+    const gcThreadsContainer = $('<div class="form-group col-sm-6"></div>').appendTo(optionsContainer);
     gcThreadsContainer.append('<label>Parallel GC&CMS Threads</label>');
     $('<input class="form-control">').val(config.parallelThreads).change(function(){
         config.parallelThreads = Number($(this).val());
@@ -104,6 +108,9 @@ $(function(){
     const startBtn = $('<button id="startBtn" class="btn btn-default"></button>').text(messages.start)
         .appendTo(toolsContainer)
         .click(function(){
+            if(config.oom) {
+                clear();
+            }
         config.running = !config.running;
         $(this).text(config.running ? messages.stop:messages.start);
         updateStatus(config.running ? messages.running : messages.stopped);
@@ -215,6 +222,7 @@ svg.append('text')
 let edenSize = 0;
 let edenObjects = [];
 let survivorObjects = [];
+let tenuredObjects = [];
 let survivors = [survivor1, survivor2];
 function createObject() {
     const size = Math.ceil(Math.random() * config.objectBaseSize);
@@ -223,49 +231,122 @@ function createObject() {
         .attr('width', size)
         .attr('height', config.youngHeight)
         .attr('x', config.youngX + config.youngWidth / 2)
-        .attr('y', 0);
+        .attr('y', 0)
+        .attr('class', 'object');
     c.append('rect')
         .attr('width', size)
         .attr('height', config.youngHeight)
-        .attr('class', 'object')
         .attr('fill', color);
     c.append('text')
         .attr('x', size / 2)
         .attr('y', config.youngHeight / 2)
-        .attr('class', 'inline-label')
         .text(String(0));
-    c._data = {size};
+    c._data = {size, birth: new Date().getTime()};
     return c;
 }
-function isCollectible(surviveChance) {
+function isCollectible(obj, surviveChance) {
     return Math.random() > surviveChance;
 }
-function majorGC() {
+function majorGC(obj) {
+    // we just finished a major GC, so an OOM should throw.
+    if(config.step === null) {
+        OOM(obj);
+        return;
+    }
     updateStatus(messages.majorGCStart);
-    ticks.push(() => {
-
-    });
-
+    config.step = 'majorGC';
+    switch(config.gcType) {
+        case 'serialGC':// same as parallelOldGC
+        case 'parallelGC':// same as parallelOldGC
+        case 'parallelOldGC':{
+            ticks.push(() => {
+                const marked = [];
+                const collectible = [];
+                for(let obj of [...tenuredObjects]) {
+                    if(isCollectible(obj, config.tenuredSurviveChance)) {
+                        marked.push(mark(obj));
+                        collectible.push(collect(obj, tenuredObjects));
+                        removeFirst(tenuredObjects, obj);
+                    }
+                }
+                let threads = config.gcType === 'parallelOldGC' ? config.parallelThreads : 1;
+                while(marked.length > 0 && threads > 0) {
+                    let tasks = [];
+                    for(let i = 0;i < threads;i++) {
+                        let fn = marked.shift();
+                        if(fn) {
+                            tasks.push(fn);
+                        }
+                    }
+                    ticks.push(() => {
+                        updateStatus(messages.majorGCMarking);
+                        tasks.forEach(fn => fn());
+                    });
+                }
+                while(collectible.length > 0 && threads > 0) {
+                    let tasks = [];
+                    for(let i = 0;i < threads;i++) {
+                        let fn = collectible.shift();
+                        if(fn) {
+                            tasks.push(fn);
+                        }
+                    }
+                    ticks.push(() => {
+                        updateStatus(messages.majorGCRecycling);
+                        tasks.forEach(fn => fn());
+                    });
+                }
+                ticks.push(() => {
+                    // ordering, move old objects to the beginning of the heap
+                    bubbleSortObjectsByBirth(tenuredObjects);
+                    // compact
+                    let offset = 0;
+                    for(let obj of tenuredObjects) {
+                        // ticks.push(() => {
+                            updateStatus(messages.majorGCCompacting);
+                            obj.transition()
+                                .duration(config.tickPeriod)
+                                .attr('x', tenuredGeneration._data.x + offset);
+                            offset += obj._data.size;
+                        // });
+                    }
+                    // ticks.push(() => {
+                        tenuredGeneration._data.size = 0;
+                        for(let obj of tenuredObjects) {
+                            tenuredGeneration._data.size += obj._data.size;
+                        }
+                        updateStatus(messages.majorGCFinished);
+                    // });
+                    config.step = null;
+                    // if(callback) {
+                    //     // ticks.push(callback);
+                    //     callback();
+                    // }
+                });
+            });
+        }
+    }
 }
 function minorGC(callback) {
     updateStatus(messages.minorGCStart);
+    config.step = 'minorGC';
     ticks.push(() => {
         const toSurvivorObjects = [];
         const marked = [];
         const collectible = [];
-        const promotable = [];
+        const survivable = [];
         for(let obj of [...edenObjects, ...survivorObjects]) {
-            if(isCollectible(obj._data.position === 's'?config.survivorSurviveChance:config.edenSurviveChance)) {
+            if(isCollectible(obj, obj._data.position === 's'?config.survivorSurviveChance:config.edenSurviveChance)) {
                 marked.push(mark(obj));
                 collectible.push(collect(obj, edenObjects));
+                removeFirst(obj._data.position === 's' ? survivorObjects : edenObjects, obj);
                 continue;
             }
-            promotable.push(() => {
+            survivable.push(() => {
                 const age = Number(obj.select('text').text()) + 1;
                 obj.select('text').text(String(age));
                 if(age > config.maxTenuringThreshold || obj._data.size + survivors[1]._data.size > config.survivorWidth) {
-                    promote(obj);
-                    return;
+                    return promote(obj);
                 }
                 obj._data.position = 's';
                 toSurvivorObjects.push(obj);
@@ -273,6 +354,7 @@ function minorGC(callback) {
                     .duration(config.tickPeriod)
                     .attr('x', survivors[1]._data.x + survivors[1]._data.size);
                 survivors[1]._data.size += obj._data.size;
+                return true;
             });
         }
         let threads = config.gcType === 'serialGC' ? 1 : config.parallelThreads;
@@ -306,66 +388,99 @@ function minorGC(callback) {
         //     updateStatus(messages.minorGCRecycling);
         //     collectible.forEach((fn) => fn());
         // });
-        while(promotable.length > 0 && threads > 0) {
-            let tasks = [];
-            for(let i = 0;i < threads;i++) {
-                let fn = promotable.shift();
-                if(fn) {
-                    tasks.push(fn);
-                }
-            }
-            ticks.push(() => {
-                tasks.forEach(fn => fn());
-            });
-        }
+        // while(promotable.length > 0 && threads > 0) {
+        //     let tasks = [];
+        //     for(let i = 0;i < threads;i++) {
+        //         let fn = promotable.shift();
+        //         if(fn) {
+        //             tasks.push(fn);
+        //         }
+        //     }
+        //     ticks.push(() => {
+        //         handlePromotable(tasks);
+        //     });
+        // }
         // promotable.forEach(fn => {
         //     ticks.push(fn);
         // });
+        // Using single 'thread' for promotion since using multiple 'threads' makes it too complex when meeting major GC.
         ticks.push(() => {
-            edenObjects = [];
-            survivorObjects = toSurvivorObjects;
-            survivors[0]._data.size = 0;
-            const oldFromSurvivor = survivors[0];
-            survivors[0] = survivors[1];
-            survivors[1] = oldFromSurvivor;
-            survivors[0]._data.label.text(messages.fromSurvivor);
-            survivors[1]._data.label.text(messages.toSurvivor);
-            edenSize = 0;
-            updateStatus(messages.minorGCFinished);
+            handleSurvivable(survivable, () => {
+                ticks.push(() => {
+                    finishMinorGC(toSurvivorObjects);
+                    if(callback) {
+                        callback();
+                    }
+                });
+            });
         });
-        if(callback) {
-            callback();
-        }
     });
 }
-function promote(obj) {
-    removeFirst(edenObjects, obj);
-    if(tenuredGeneration._data.size + obj._data.size > config.tenuredWidth) {
-        majorGC(() => {
-            obj.transition()
-                .duration(config.tickPeriod)
-                .attr('x', config.tenuredX + tenuredGeneration._data.size)
-                .attr('y', config.tenuredY);
-            tenuredGeneration._data.size += obj._data.size;
+function finishMinorGC(toSurvivorObjects) {
+    edenObjects = [];
+    survivorObjects = toSurvivorObjects;
+    survivors[0]._data.size = 0;
+    const oldFromSurvivor = survivors[0];
+    survivors[0] = survivors[1];
+    survivors[1] = oldFromSurvivor;
+    survivors[0]._data.label.text(messages.fromSurvivor);
+    survivors[1]._data.label.text(messages.toSurvivor);
+    edenSize = 0;
+    updateStatus(messages.minorGCFinished);
+    config.step = 'null';
+}
+function OOM(obj) {
+    config.running = false;
+    config.oom = true;
+    ticks.splice(0, ticks.length);
+    $('#startBtn').text(messages.start);
+    updateStatus(`OutOfMemoryError, Tenured Size: ${config.tenuredWidth}, Used: ${tenuredGeneration._data.size}, Require: ${obj._data.size}`);
+}
+function handleSurvivable(tasks, callback) {
+    let task = tasks.shift();
+    while(task) {
+        if(!task()) {
+            // meeting major GC, promotion task failed.
+            tasks.unshift(task);
+            break;
+        }
+        task = tasks.shift();
+    }
+    // wait for major GC to be finished.
+    if(tasks.length > 0) {
+        ticks.push(() => {
+            handleSurvivable(tasks, callback);
         });
         return;
+    }
+    if(callback) {
+        callback();
+    }
+}
+function promote(obj) {
+    // removeFirst(edenObjects, obj);
+    if(tenuredGeneration._data.size + obj._data.size > config.tenuredWidth) {
+        console.log(`Tenured Size: ${config.tenuredWidth}, Used: ${tenuredGeneration._data.size}, Require: ${obj._data.size}`);
+        majorGC(obj);
+        return false;
     }
     obj.transition()
         .duration(config.tickPeriod)
         .attr('x', config.tenuredX + tenuredGeneration._data.size)
         .attr('y', config.tenuredY);
+    tenuredObjects.push(obj);
     tenuredGeneration._data.size += obj._data.size;
+    return true;
 }
 function mark(obj) {
     return () => obj.select('rect').attr('fill', 'url(#diagonalHatch)')
 }
-function collect(obj, objects) {
+function collect(obj) {
     return () => {
         obj.transition()
             .duration(config.tickPeriod)
             .attr('width', 1)
             .on('end', () => {
-                removeFirst(objects, obj);
                 obj.remove();
             });
     };
@@ -417,4 +532,28 @@ function doCreate() {
         .attr('x', edenSize)
         .attr('y', config.youngY);
     edenSize += size;
+}
+
+function bubbleSortObjectsByBirth(arr){
+    var len = arr.length;
+    for (var i = len-1; i>=0; i--){
+        for(var j = 1; j<=i; j++){
+            if(arr[j-1]._data.birth<arr[j]._data.birth){
+                var temp = arr[j-1];
+                arr[j-1] = arr[j];
+                arr[j] = temp;
+            }
+        }
+    }
+    return arr;
+}
+function clear() {
+    svg.selectAll('.object').each((_, i, array) => d3.select(array[i]).remove());
+    edenObjects = [];
+    survivorObjects = [];
+    tenuredObjects = [];
+    edenSize = 0;
+    survivor1._data.size = 0;
+    survivor2._data.size = 0;
+    tenuredGeneration._data.size = 0;
 }
